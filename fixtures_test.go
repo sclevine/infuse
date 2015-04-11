@@ -73,3 +73,26 @@ end second
 finished next for first
 end first
 `
+
+var panicRecoveryHandlerFixture = `start first
+attempting next for first
+start recoverable
+start second
+attempting next for second
+start third
+attempting next for third
+panicking
+recovered and attempting next
+start second
+attempting next for second
+start third
+attempting next for third
+already panicked
+finished next for third
+end third
+finished next for second
+end second
+finished next after recovery
+finished next for first
+end first
+`

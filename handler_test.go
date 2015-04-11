@@ -26,6 +26,29 @@ func buildHandler(name string, nexts int) func(http.ResponseWriter, *http.Reques
 	}
 }
 
+func panicHandler(response http.ResponseWriter, _ *http.Request) {
+	if infuse.Get(response) != nil {
+		fmt.Fprintf(response, "already panicked\n")
+	} else {
+		fmt.Fprintf(response, "panicking\n")
+		infuse.Set(response, true)
+		panic("some error")
+	}
+}
+
+func recoverHandler(response http.ResponseWriter, request *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprint(response, "recovered and attempting next\n")
+			infuse.Next(response, request)
+			fmt.Fprint(response, "finished next after recovery\n")
+		}
+	}()
+	fmt.Fprint(response, "start recoverable\n")
+	infuse.Next(response, request)
+	fmt.Fprint(response, "end recoverable\n")
+}
+
 func createMapHandler(response http.ResponseWriter, request *http.Request) {
 	infuse.Set(response, make(map[string]string))
 	infuse.Next(response, request)
@@ -119,4 +142,11 @@ func TestGetAndSet(t *testing.T) {
 	testHandlerResponse(t, handler, "first key: new first value\nsecond key: second value\n")
 }
 
+func TestPanicRecovery(t *testing.T) {
+	handler := infuse.New().HandleFunc(buildHandler("first", 1))
+	handler = handler.HandleFunc(recoverHandler)
+	handler = handler.HandleFunc(buildHandler("second", 1))
+	handler = handler.HandleFunc(buildHandler("third", 1))
+	handler = handler.HandleFunc(panicHandler)
+	testHandlerResponse(t, handler, panicRecoveryHandlerFixture)
 }
