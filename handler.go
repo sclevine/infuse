@@ -75,6 +75,20 @@ type contextualResponse struct {
 	layers  []*layer
 }
 
+func (c *contextualResponse) next(request *http.Request) bool {
+	if len(c.layers) == 0 {
+		return false
+	}
+
+	originalLayers := c.layers
+	nextLayer := c.layers[len(c.layers)-1]
+	c.layers = c.layers[:len(c.layers)-1]
+	defer func() { c.layers = originalLayers }()
+
+	nextLayer.handler.ServeHTTP(c, request)
+	return true
+}
+
 // Next should only be called from within an http.Handler that is served by an
 // infuse.Handler. Next serves the next http.Handler in the middleware stack.
 //
@@ -87,18 +101,7 @@ type contextualResponse struct {
 // caller. Like http.ResponseWriter, Next is not safe for concurrent usage
 // with other parts of the same request-response cycle.
 func Next(response http.ResponseWriter, request *http.Request) bool {
-	sharedResponse := convertResponse(response)
-	layers := sharedResponse.layers
-	if len(layers) == 0 {
-		return false
-	}
-
-	next := layers[len(layers)-1]
-	sharedResponse.layers = layers[:len(layers)-1]
-	defer func() { sharedResponse.layers = layers }()
-
-	next.handler.ServeHTTP(response, request)
-	return true
+	return convertResponse(response).next(request)
 }
 
 // Get will retrieve a value that is shared by the every infuse-served
