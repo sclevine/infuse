@@ -57,7 +57,7 @@ func serve(t *testing.T, handler infuse.Handler) string {
 	return response.Body.String()
 }
 
-func testBody(t *testing.T, handler infuse.Handler, fixture string) {
+func testHandlerResponse(t *testing.T, handler infuse.Handler, fixture string) {
 	if body := serve(t, handler); body != fixture {
 		t.Fatalf("Expected:\n%s\n\nGot:\n%s", fixture, body)
 	}
@@ -66,7 +66,7 @@ func testBody(t *testing.T, handler infuse.Handler, fixture string) {
 func TestNew(t *testing.T) {
 	handler := infuse.New()
 	if serve(t, handler) != "" {
-		t.Fatal("")
+		t.Fatal("Failed to serve empty infuse.Handler.")
 	}
 }
 
@@ -74,14 +74,14 @@ func TestHandler(t *testing.T) {
 	handler := infuse.New().HandleFunc(buildHandler("first", 1))
 	handler = handler.HandleFunc(buildHandler("second", 1))
 	handler = handler.HandleFunc(buildHandler("third", 1))
-	testBody(t, handler, threeHandlerFixture)
+	testHandlerResponse(t, handler, threeHandlerFixture)
 }
 
 func TestNestedHandlers(t *testing.T) {
 	handler := infuse.New().HandleFunc(buildHandler("third", 1))
 	handler = infuse.New().HandleFunc(buildHandler("second", 1)).Handle(handler)
 	handler = infuse.New().HandleFunc(buildHandler("first", 1)).Handle(handler)
-	testBody(t, handler, threeHandlerFixture)
+	testHandlerResponse(t, handler, threeHandlerFixture)
 }
 
 func TestComplexNestedHandlers(t *testing.T) {
@@ -92,7 +92,7 @@ func TestComplexNestedHandlers(t *testing.T) {
 	second = second.HandleFunc(buildHandler("second-second", 1))
 
 	handler := first.Handle(second)
-	testBody(t, handler, complexHandlerFixture)
+	testHandlerResponse(t, handler, complexHandlerFixture)
 }
 
 func TestBranchedHandlers(t *testing.T) {
@@ -100,13 +100,13 @@ func TestBranchedHandlers(t *testing.T) {
 	first := base.HandleFunc(buildHandler("first", 1))
 	second := base.HandleFunc(buildHandler("second", 1))
 	handler := first.Handle(second)
-	testBody(t, handler, branchedHandlerFixture)
+	testHandlerResponse(t, handler, branchedHandlerFixture)
 }
 
 func TestMultipleNextCalls(t *testing.T) {
 	handler := infuse.New().HandleFunc(buildHandler("first", 2))
 	handler = handler.HandleFunc(buildHandler("second", 3))
-	testBody(t, handler, multipleCallHandlerFixture)
+	testHandlerResponse(t, handler, multipleCallHandlerFixture)
 }
 
 func TestGetAndSet(t *testing.T) {
@@ -116,5 +116,7 @@ func TestGetAndSet(t *testing.T) {
 	handler = handler.HandleFunc(buildSetMapHandler("first key", "new first value"))
 	handler = handler.HandleFunc(buildOutputMapHandler("first key"))
 	handler = handler.HandleFunc(buildOutputMapHandler("second key"))
-	testBody(t, handler, "first key: new first value\nsecond key: second value\n")
+	testHandlerResponse(t, handler, "first key: new first value\nsecond key: second value\n")
+}
+
 }
