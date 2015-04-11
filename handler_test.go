@@ -82,7 +82,7 @@ func serve(t *testing.T, handler infuse.Handler) string {
 
 func testHandlerResponse(t *testing.T, handler infuse.Handler, fixture string) {
 	if body := serve(t, handler); body != fixture {
-		t.Fatalf("Expected:\n%s\n\nGot:\n%s", fixture, body)
+		t.Fatalf("Expected:\n%s\nGot:\n%s\n", fixture, body)
 	}
 }
 
@@ -152,6 +152,20 @@ func TestGetAndSet(t *testing.T) {
 	handler = handler.HandleFunc(buildOutputMapHandler("first key"))
 	handler = handler.HandleFunc(buildOutputMapHandler("second key"))
 	testHandlerResponse(t, handler, "first key: new first value\nsecond key: second value\n")
+}
+
+func TestGetAndSetForNestedHandlers(t *testing.T) {
+	firstGroup := infuse.New().HandleFunc(createMapHandler)
+	firstGroup = firstGroup.HandleFunc(buildSetMapHandler("key", "first value"))
+
+	secondGroup := infuse.New().HandleFunc(createMapHandler)
+	secondGroup = secondGroup.HandleFunc(buildSetMapHandler("key", "second value"))
+	secondGroup = secondGroup.HandleFunc(buildOutputMapHandler("key"))
+
+	handler := firstGroup.Stack(secondGroup)
+	handler = handler.HandleFunc(buildOutputMapHandler("key"))
+
+	testHandlerResponse(t, handler, "key: second value\nkey: first value\n")
 }
 
 func TestPanicRecovery(t *testing.T) {
