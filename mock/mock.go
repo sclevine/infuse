@@ -26,6 +26,16 @@ func (h *Handler) HandleFunc(handler func(http.ResponseWriter, *http.Request)) i
 	return h
 }
 
+func (h *Handler) Stack(handler http.Handler) infuse.Handler {
+	h.Handlers = append(h.Handlers, handler)
+	return h
+}
+
+func (h *Handler) StackFunc(handler func(http.ResponseWriter, *http.Request)) infuse.Handler {
+	h.Handlers = append(h.Handlers, http.HandlerFunc(handler))
+	return h
+}
+
 func (h *Handler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	h.Serves = append(h.Serves, Serve{response, request})
 }
