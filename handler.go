@@ -116,7 +116,7 @@ type contextualResponse struct {
 }
 
 func (c *contextualResponse) next(request *http.Request) bool {
-	if c == nil || len(c.layers) == 0 {
+	if len(c.layers) == 0 {
 		return false
 	}
 
@@ -127,21 +127,6 @@ func (c *contextualResponse) next(request *http.Request) bool {
 
 	nextLayer.handler.ServeHTTP(c, request)
 	return true
-}
-
-func (c *contextualResponse) setContext(value interface{}) bool {
-	if c == nil {
-		return false
-	}
-	c.context = value
-	return true
-}
-
-func (c *contextualResponse) getContext() interface{} {
-	if c == nil {
-		return nil
-	}
-	return c.context
 }
 
 // Next serves the next http.Handler. Next should only be called from an
@@ -191,7 +176,7 @@ func Get(response http.ResponseWriter) interface{} {
 	if !ok {
 		return nil
 	}
-	return sharedResponse.getContext()
+	return sharedResponse.context
 }
 
 // Set will store a context value that is shared by the each http.Handler
@@ -200,5 +185,9 @@ func Get(response http.ResponseWriter) interface{} {
 // the same context value. Set will return false if the response is invalid.
 func Set(response http.ResponseWriter, value interface{}) bool {
 	sharedResponse, ok := response.(*contextualResponse)
-	return ok && sharedResponse.setContext(value)
+	if !ok {
+		return false
+	}
+	sharedResponse.context = value
+	return true
 }
