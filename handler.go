@@ -116,7 +116,7 @@ type contextualResponse struct {
 }
 
 func (c *contextualResponse) next(request *http.Request) bool {
-	if len(c.layers) == 0 {
+	if c == nil || len(c.layers) == 0 {
 		return false
 	}
 
@@ -127,6 +127,21 @@ func (c *contextualResponse) next(request *http.Request) bool {
 
 	nextLayer.handler.ServeHTTP(c, request)
 	return true
+}
+
+func (c *contextualResponse) setContext(value interface{}) bool {
+	if c == nil {
+		return false
+	}
+	c.context = value
+	return true
+}
+
+func (c *contextualResponse) getContext() interface{} {
+	if c == nil {
+		return nil
+	}
+	return c.context
 }
 
 // Next serves the next http.Handler. Next should only be called from an
@@ -146,13 +161,14 @@ func Next(response http.ResponseWriter, request *http.Request) bool {
 	return ok && sharedResponse.next(request)
 }
 
-// Get will retrieve a context value that is shared by the each http.Handler
+// Get will retrieve a context value that is shared by each http.Handler
 // attached to the same infuse.Handler within a single request-response cycle.
 // http.Handlers that are attached to different infuse.Handlers do not share
 // the same context value.
 //
 // If the context value is a pointer, map, or slice, changes to the referent
-// data will be seen by other http.Handlers that share the context value.
+// data will be seen by other http.Handlers that share the context value. If
+// called with an invalid response, Get returns nil.
 //
 // To retrieve a value of a particular type, consider wrapping infuse.Get:
 //   func GetMyContext(response http.ResponseWriter) *MyContext {
@@ -164,18 +180,25 @@ func Next(response http.ResponseWriter, request *http.Request) bool {
 //      handlerMap, ok := infuse.Get(response).(map[string]string)
 //      if !ok || handlerMap == nil {
 //         handlerMap = make(map[string]string)
-//         infuse.Set(response, handlerMap)
+//         if ok := infuse.Set(response, handlerMap); !ok {
+//            return nil
+//         }
 //      }
 //      return handlerMap
 //   }
 func Get(response http.ResponseWriter) interface{} {
-	return response.(*contextualResponse).context
+	sharedResponse, ok := response.(*contextualResponse)
+	if !ok {
+		return nil
+	}
+	return sharedResponse.getContext()
 }
 
 // Set will store a context value that is shared by the each http.Handler
 // attached to the same infuse.Handler within a single request-response cycle.
 // http.Handlers that are attached to different infuse.Handlers do not share
-// the same context value.
-func Set(response http.ResponseWriter, value interface{}) {
-	response.(*contextualResponse).context = value
+// the same context value. Set will return false if the response is invalid.
+func Set(response http.ResponseWriter, value interface{}) bool {
+	sharedResponse, ok := response.(*contextualResponse)
+	return ok && sharedResponse.setContext(value)
 }

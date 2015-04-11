@@ -73,7 +73,7 @@ func buildSetMapHandler(key, value string) func(http.ResponseWriter, *http.Reque
 func serve(t *testing.T, handler infuse.Handler) string {
 	request, err := http.NewRequest("GET", "http://example.com", nil)
 	if err != nil {
-		t.Fatal("Failed to generate request.")
+		t.Fatalf("Failed to generate request: %s", err)
 	}
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -87,10 +87,7 @@ func testHandlerResponse(t *testing.T, handler infuse.Handler, fixture string) {
 }
 
 func TestNew(t *testing.T) {
-	handler := infuse.New()
-	if serve(t, handler) != "" {
-		t.Fatal("Failed to serve empty infuse.Handler.")
-	}
+	testHandlerResponse(t, infuse.New(), "")
 }
 
 func TestHandler(t *testing.T) {
@@ -175,4 +172,16 @@ func TestPanicRecovery(t *testing.T) {
 	handler = handler.HandleFunc(buildHandler("third", 1))
 	handler = handler.HandleFunc(panicHandler)
 	testHandlerResponse(t, handler, panicRecoveryHandlerFixture)
+}
+
+func TestInvalidResponse(t *testing.T) {
+	if context := infuse.Get(nil); context != nil {
+		t.Fatalf("Expected nil context from invalid response, got %s.", context)
+	}
+	if ok := infuse.Set(nil, "value"); ok {
+		t.Fatal("Expected failure to set context on invalid response.")
+	}
+	if ok := infuse.Next(nil, &http.Request{}); ok {
+		t.Fatal("Expected failure to serve next handler with invalid response.")
+	}
 }
