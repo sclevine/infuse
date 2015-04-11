@@ -108,13 +108,13 @@ func TestNestedHandlers(t *testing.T) {
 }
 
 func TestComplexNestedHandlers(t *testing.T) {
-	first := infuse.New().HandleFunc(buildHandler("first-first", 1))
-	first = first.HandleFunc(buildHandler("first-second", 1))
+	firstGroup := infuse.New().HandleFunc(buildHandler("first-first", 1))
+	firstGroup = firstGroup.HandleFunc(buildHandler("first-second", 1))
 
-	second := infuse.New().HandleFunc(buildHandler("second-first", 1))
-	second = second.HandleFunc(buildHandler("second-second", 1))
+	secondGroup := infuse.New().HandleFunc(buildHandler("second-first", 1))
+	secondGroup = secondGroup.HandleFunc(buildHandler("second-second", 1))
 
-	handler := first.Handle(second)
+	handler := firstGroup.Handle(secondGroup)
 	testHandlerResponse(t, handler, complexHandlerFixture)
 }
 
@@ -130,6 +130,18 @@ func TestMultipleNextCalls(t *testing.T) {
 	handler := infuse.New().HandleFunc(buildHandler("first", 2))
 	handler = handler.HandleFunc(buildHandler("second", 3))
 	testHandlerResponse(t, handler, multipleCallHandlerFixture)
+}
+
+func TestStackedHandlers(t *testing.T) {
+	firstGroup := infuse.New().StackFunc(buildHandler("first stacked", 0))
+	firstGroup = firstGroup.StackFunc(buildHandler("second stacked", 0))
+
+	secondGroup := infuse.New().StackFunc(buildHandler("third stacked", 0))
+	secondGroup = secondGroup.HandleFunc(buildHandler("fourth handled", 1))
+	secondGroup = secondGroup.StackFunc(buildHandler("fifth stacked", 0))
+
+	handler := firstGroup.Stack(secondGroup)
+	testHandlerResponse(t, handler, stackedHandlerFixture)
 }
 
 func TestGetAndSet(t *testing.T) {

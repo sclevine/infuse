@@ -96,3 +96,17 @@ finished next after recovery
 finished next for first
 end first
 `
+
+var stackedHandlerFixture = `start first stacked
+end first stacked
+start second stacked
+end second stacked
+start third stacked
+end third stacked
+start fourth handled
+attempting next for fourth handled
+start fifth stacked
+end fifth stacked
+finished next for fourth handled
+end fourth handled
+`

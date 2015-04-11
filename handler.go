@@ -17,13 +17,26 @@ type Handler interface {
 	// Handle returns a new infuse.Handler that serves the provided
 	// http.Handler after all existing http.Handlers are served. The
 	// newly-provided http.Handler will be called when the previously-provided
-	// http.Handler calls infuse.Next. The provided http.Handler may be
-	// an infuse.Handler itself.
+	// http.Handler calls infuse.Next.
+	//
+	// The http.Handler provided may be an infuse.Handler itself.
 	Handle(handler http.Handler) Handler
 
 	// HandleFunc is the same as Handle, but it takes a handler function
 	// instead of an http.Handler.
 	HandleFunc(handler func(http.ResponseWriter, *http.Request)) Handler
+
+	// Stack is the same as Handle but will implicitly serve any subsequently
+	// provided http.Handler automatically. This is especially useful for serving
+	// generic handlers that do not know about infuse.
+	//
+	// Note that any explicit calls to infuse.Next in a stacked http.Handler
+	// will not prevent the
+	Stack(handler http.Handler) Handler
+
+	// StackFunc is the same as Stack, but it takes a handler function
+	// instead of an http.Handler.
+	StackFunc(handler func(http.ResponseWriter, *http.Request)) Handler
 
 	// ServeHTTP serves the first http.Handler provided to the infuse.Handler.
 	ServeHTTP(response http.ResponseWriter, request *http.Request)
@@ -47,12 +60,26 @@ func (l *layer) HandleFunc(handler func(http.ResponseWriter, *http.Request)) Han
 	return l.Handle(http.HandlerFunc(handler))
 }
 
+func (l *layer) Stack(handler http.Handler) Handler {
+	return l.HandleFunc(func(response http.ResponseWriter, request *http.Request) {
+		handler.ServeHTTP(response, request)
+		Next(response, request)
+	})
+}
+
+func (l *layer) StackFunc(handler func(http.ResponseWriter, *http.Request)) Handler {
+	return l.Stack(http.HandlerFunc(handler))
+}
+
 func (l *layer) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if l == nil {
 		return
 	}
 
 	sharedResponse := convertResponse(response)
+
+	originalLayers := sharedResponse.layers
+	defer func() { sharedResponse.layers = originalLayers }()
 
 	current := l
 	for ; current.prev != nil; current = current.prev {
