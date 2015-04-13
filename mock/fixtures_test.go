@@ -7,7 +7,7 @@ start second
 end second
 start third
 end third
-start third
-end third
+start fourth
+end fourth
 end stub
 `

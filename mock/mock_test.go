@@ -21,7 +21,7 @@ func TestMock(t *testing.T) {
 	})
 	responseBody := serve(setupHandlers(mockHandler))
 	if responseBody != mockHandlerFixture {
-		t.Fatalf("Expected:\n%s\nGot:\n%s\n", mockHandlerFixture, body)
+		t.Fatalf("Expected:\n%s\nGot:\n%s\n", mockHandlerFixture, responseBody)
 	}
 }
 
@@ -29,7 +29,7 @@ func setupHandlers(handler infuse.Handler) http.Handler {
 	handler = handler.Handle(http.HandlerFunc(buildHandler("first")))
 	handler = handler.HandleFunc(buildHandler("second"))
 	handler = handler.Stack(http.HandlerFunc(buildHandler("third")))
-	handler = handler.StackFunc(buildHandler("third"))
+	handler = handler.StackFunc(buildHandler("fourth"))
 	return handler
 }
 
