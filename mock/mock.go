@@ -6,36 +6,39 @@ import (
 	"github.com/sclevine/infuse"
 )
 
-type Serve struct {
-	Response http.ResponseWriter
-	Request  *http.Request
+type Handler struct {
+	handlers []http.Handler
+	stub     StubFunc
 }
 
-type Handler struct {
-	Handlers []http.Handler
-	Serves   []Serve
-}
+type StubFunc func(http.ResponseWriter, *http.Request, []http.Handler)
 
 func (h *Handler) Handle(handler http.Handler) infuse.Handler {
-	h.Handlers = append(h.Handlers, handler)
-	return h
+	return &Handler{handlers: append(h.handlers, handler), stub: h.stub}
 }
 
 func (h *Handler) HandleFunc(handler func(http.ResponseWriter, *http.Request)) infuse.Handler {
-	h.Handlers = append(h.Handlers, http.HandlerFunc(handler))
-	return h
+	return h.Handle(http.HandlerFunc(handler))
 }
 
 func (h *Handler) Stack(handler http.Handler) infuse.Handler {
-	h.Handlers = append(h.Handlers, handler)
-	return h
+	return h.HandleFunc(func(response http.ResponseWriter, request *http.Request) {
+		handler.ServeHTTP(response, request)
+		infuse.Next(response, request)
+	})
 }
 
 func (h *Handler) StackFunc(handler func(http.ResponseWriter, *http.Request)) infuse.Handler {
-	h.Handlers = append(h.Handlers, http.HandlerFunc(handler))
-	return h
+	return h.Stack(http.HandlerFunc(handler))
 }
 
 func (h *Handler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	h.Serves = append(h.Serves, Serve{response, request})
+	if h.stub == nil {
+		panic("Mock infuse.Handler missing stub.")
+	}
+	h.stub(response, request, h.handlers)
+}
+
+func (h *Handler) Stub(stub StubFunc) {
+	h.stub = stub
 }
