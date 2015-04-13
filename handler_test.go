@@ -39,14 +39,14 @@ func panicHandler(response http.ResponseWriter, _ *http.Request) {
 func recoverHandler(response http.ResponseWriter, request *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Fprint(response, "recovered and attempting next\n")
+			fmt.Fprintln(response, "recovered and attempting next")
 			infuse.Next(response, request)
-			fmt.Fprint(response, "finished next after recovery\n")
+			fmt.Fprintln(response, "finished next after recovery")
 		}
 	}()
-	fmt.Fprint(response, "start recoverable\n")
+	fmt.Fprintln(response, "start recoverable")
 	infuse.Next(response, request)
-	fmt.Fprint(response, "end recoverable\n")
+	fmt.Fprintln(response, "end recoverable")
 }
 
 func createMapHandler(response http.ResponseWriter, request *http.Request) {
@@ -71,12 +71,8 @@ func buildSetMapHandler(key, value string) func(http.ResponseWriter, *http.Reque
 }
 
 func serve(t *testing.T, handler infuse.Handler) string {
-	request, err := http.NewRequest("GET", "http://example.com", nil)
-	if err != nil {
-		t.Fatalf("Failed to generate request: %s", err)
-	}
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
+	handler.ServeHTTP(response, &http.Request{})
 	return response.Body.String()
 }
 
