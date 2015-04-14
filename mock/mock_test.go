@@ -4,11 +4,24 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/sclevine/infuse"
 	"github.com/sclevine/infuse/mock"
 )
+
+var mockHandlerFixture = `
+start stub
+start first
+end first
+start second
+end second
+start third
+end third
+start fourth
+end fourth
+end stub`
 
 func TestMock(t *testing.T) {
 	mockHandler := &mock.Handler{}
@@ -19,9 +32,14 @@ func TestMock(t *testing.T) {
 		}
 		fmt.Fprintln(response, "end stub")
 	})
-	responseBody := serve(setupHandlers(mockHandler))
-	if responseBody != mockHandlerFixture {
-		t.Fatalf("Expected:\n%s\nGot:\n%s\n", mockHandlerFixture, responseBody)
+	handler := setupHandlers(mockHandler)
+	testHandlerResponse(t, handler, mockHandlerFixture)
+}
+
+func testHandlerResponse(t *testing.T, handler http.Handler, fixture string) {
+	expected := strings.TrimSpace(fixture)
+	if body := strings.TrimSpace(serve(handler)); body != expected {
+		t.Fatalf("Expected:\n%s\nGot:\n%s\n", expected, body)
 	}
 }
 

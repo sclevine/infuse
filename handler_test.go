@@ -1,92 +1,29 @@
 package infuse_test
 
 import (
-	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/sclevine/infuse"
 )
 
-func buildHandler(name string, nexts int) func(http.ResponseWriter, *http.Request) {
-	return func(response http.ResponseWriter, request *http.Request) {
-		fmt.Fprintf(response, "start %s\n", name)
-
-		for i := 0; i < nexts; i++ {
-			fmt.Fprintf(response, "attempting next for %s\n", name)
-			if infuse.Next(response, request) {
-				fmt.Fprintf(response, "finished next for %s\n", name)
-			} else {
-				fmt.Fprintf(response, "no next for %s\n", name)
-			}
-		}
-
-		fmt.Fprintf(response, "end %s\n", name)
-	}
-}
-
-func panicHandler(response http.ResponseWriter, _ *http.Request) {
-	if infuse.Get(response) != nil {
-		fmt.Fprintf(response, "already panicked\n")
-	} else {
-		fmt.Fprintf(response, "panicking\n")
-		infuse.Set(response, true)
-		panic("some error")
-	}
-}
-
-func recoverHandler(response http.ResponseWriter, request *http.Request) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintln(response, "recovered and attempting next")
-			infuse.Next(response, request)
-			fmt.Fprintln(response, "finished next after recovery")
-		}
-	}()
-	fmt.Fprintln(response, "start recoverable")
-	infuse.Next(response, request)
-	fmt.Fprintln(response, "end recoverable")
-}
-
-func createMapHandler(response http.ResponseWriter, request *http.Request) {
-	if ok := infuse.Set(response, make(map[string]string)); !ok {
-		panic("Failed to set map.")
-	}
-	infuse.Next(response, request)
-}
-
-func buildOutputMapHandler(key string) func(http.ResponseWriter, *http.Request) {
-	return func(response http.ResponseWriter, request *http.Request) {
-		shared := infuse.Get(response).(map[string]string)
-		fmt.Fprintf(response, "%s: %s\n", key, shared[key])
-		infuse.Next(response, request)
-	}
-}
-
-func buildSetMapHandler(key, value string) func(http.ResponseWriter, *http.Request) {
-	return func(response http.ResponseWriter, request *http.Request) {
-		shared := infuse.Get(response).(map[string]string)
-		shared[key] = value
-		infuse.Next(response, request)
-	}
-}
-
-func serve(t *testing.T, handler infuse.Handler) string {
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, &http.Request{})
-	return response.Body.String()
-}
-
-func testHandlerResponse(t *testing.T, handler infuse.Handler, fixture string) {
-	if body := serve(t, handler); body != fixture {
-		t.Fatalf("Expected:\n%s\nGot:\n%s\n", fixture, body)
-	}
-}
-
 func TestNew(t *testing.T) {
 	testHandlerResponse(t, infuse.New(), "")
 }
+
+var threeHandlerFixture = `
+start first
+attempting next for first
+start second
+attempting next for second
+start third
+attempting next for third
+no next for third
+end third
+finished next for second
+end second
+finished next for first
+end first`
 
 func TestHandler(t *testing.T) {
 	handler := infuse.New().HandleFunc(buildHandler("first", 1))
@@ -102,6 +39,24 @@ func TestNestedHandlers(t *testing.T) {
 	testHandlerResponse(t, handler, threeHandlerFixture)
 }
 
+var complexHandlerFixture = `
+start first-first
+attempting next for first-first
+start first-second
+attempting next for first-second
+start second-first
+attempting next for second-first
+start second-second
+attempting next for second-second
+no next for second-second
+end second-second
+finished next for second-first
+end second-first
+finished next for first-second
+end first-second
+finished next for first-first
+end first-first`
+
 func TestComplexNestedHandlers(t *testing.T) {
 	firstGroup := infuse.New().HandleFunc(buildHandler("first-first", 1))
 	firstGroup = firstGroup.HandleFunc(buildHandler("first-second", 1))
@@ -113,6 +68,24 @@ func TestComplexNestedHandlers(t *testing.T) {
 	testHandlerResponse(t, handler, complexHandlerFixture)
 }
 
+var branchedHandlerFixture = `
+start base
+attempting next for base
+start first
+attempting next for first
+start base
+attempting next for base
+start second
+attempting next for second
+no next for second
+end second
+finished next for base
+end base
+finished next for first
+end first
+finished next for base
+end base`
+
 func TestBranchedHandlers(t *testing.T) {
 	base := infuse.New().HandleFunc(buildHandler("base", 1))
 	first := base.HandleFunc(buildHandler("first", 1))
@@ -121,11 +94,49 @@ func TestBranchedHandlers(t *testing.T) {
 	testHandlerResponse(t, handler, branchedHandlerFixture)
 }
 
+var multipleCallHandlerFixture = `
+start first
+attempting next for first
+start second
+attempting next for second
+no next for second
+attempting next for second
+no next for second
+attempting next for second
+no next for second
+end second
+finished next for first
+attempting next for first
+start second
+attempting next for second
+no next for second
+attempting next for second
+no next for second
+attempting next for second
+no next for second
+end second
+finished next for first
+end first`
+
 func TestMultipleNextCalls(t *testing.T) {
 	handler := infuse.New().HandleFunc(buildHandler("first", 2))
 	handler = handler.HandleFunc(buildHandler("second", 3))
 	testHandlerResponse(t, handler, multipleCallHandlerFixture)
 }
+
+var stackedHandlerFixture = `
+start first stacked
+end first stacked
+start second stacked
+end second stacked
+start third stacked
+end third stacked
+start fourth handled
+attempting next for fourth handled
+start fifth stacked
+end fifth stacked
+finished next for fourth handled
+end fourth handled`
 
 func TestStackedHandlers(t *testing.T) {
 	firstGroup := infuse.New().StackFunc(buildHandler("first stacked", 0))
@@ -162,6 +173,29 @@ func TestGetAndSetForNestedHandlers(t *testing.T) {
 
 	testHandlerResponse(t, handler, "key: second value\nkey: first value\n")
 }
+
+var panicRecoveryHandlerFixture = `
+start first
+attempting next for first
+start recoverable
+start second
+attempting next for second
+start third
+attempting next for third
+panicking
+recovered and attempting next
+start second
+attempting next for second
+start third
+attempting next for third
+already panicked
+finished next for third
+end third
+finished next for second
+end second
+finished next after recovery
+finished next for first
+end first`
 
 func TestPanicRecovery(t *testing.T) {
 	handler := infuse.New().HandleFunc(buildHandler("first", 1))
