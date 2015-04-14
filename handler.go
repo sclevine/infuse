@@ -100,8 +100,7 @@ func (l *layer) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	sharedResponse := &contextualResponse{ResponseWriter: response}
-
+	sharedResponse := newLayeredResponse(response)
 	current := l
 	for ; current.prev != nil; current = current.prev {
 		sharedResponse.layers = append(sharedResponse.layers, current)
@@ -109,23 +108,29 @@ func (l *layer) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	current.handler.ServeHTTP(sharedResponse, request)
 }
 
+type layeredResponse struct {
+	*contextualResponse
+	layers []*layer
+}
+
 type contextualResponse struct {
 	http.ResponseWriter
 	context interface{}
-	layers  []*layer
 }
 
-func (c *contextualResponse) next(request *http.Request) bool {
-	if len(c.layers) == 0 {
+func newLayeredResponse(response http.ResponseWriter) *layeredResponse {
+	return &layeredResponse{&contextualResponse{response, nil}, nil}
+}
+
+func (l *layeredResponse) next(request *http.Request) bool {
+	if len(l.layers) == 0 {
 		return false
 	}
 
-	originalLayers := c.layers
-	nextLayer := c.layers[len(c.layers)-1]
-	c.layers = c.layers[:len(c.layers)-1]
-	defer func() { c.layers = originalLayers }()
-
-	nextLayer.handler.ServeHTTP(c, request)
+	next := l.layers[len(l.layers)-1]
+	remaining := l.layers[:len(l.layers)-1]
+	sharedResponse := &layeredResponse{l.contextualResponse, remaining}
+	next.handler.ServeHTTP(sharedResponse, request)
 	return true
 }
 
@@ -142,7 +147,7 @@ func (c *contextualResponse) next(request *http.Request) bool {
 // Calling Next multiple times in the same handler will run the rest of the
 // middleware chain attached to the infuse.Handler for each call.
 func Next(response http.ResponseWriter, request *http.Request) bool {
-	sharedResponse, ok := response.(*contextualResponse)
+	sharedResponse, ok := response.(*layeredResponse)
 	return ok && sharedResponse.next(request)
 }
 
@@ -172,7 +177,7 @@ func Next(response http.ResponseWriter, request *http.Request) bool {
 //      return handlerMap
 //   }
 func Get(response http.ResponseWriter) interface{} {
-	sharedResponse, ok := response.(*contextualResponse)
+	sharedResponse, ok := response.(*layeredResponse)
 	if !ok {
 		return nil
 	}
@@ -184,7 +189,7 @@ func Get(response http.ResponseWriter) interface{} {
 // http.Handlers that are attached to different infuse.Handlers do not share
 // the same context value. Set will return false if the response is invalid.
 func Set(response http.ResponseWriter, value interface{}) bool {
-	sharedResponse, ok := response.(*contextualResponse)
+	sharedResponse, ok := response.(*layeredResponse)
 	if !ok {
 		return false
 	}
