@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/sclevine/infuse"
-	"strings"
 )
 
 func testHandlerResponse(t *testing.T, handler http.Handler, fixture string) {
@@ -17,7 +17,7 @@ func testHandlerResponse(t *testing.T, handler http.Handler, fixture string) {
 	}
 }
 
-func serve(handler infuse.Handler) string {
+func serve(handler http.Handler) string {
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, &http.Request{})
 	return response.Body.String()

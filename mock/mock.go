@@ -1,3 +1,5 @@
+// Package mock makes it easy to test an infuse.Handler that is injected as a
+// dependency of the unit under test.
 package mock
 
 import (
@@ -6,6 +8,8 @@ import (
 	"github.com/sclevine/infuse"
 )
 
+// Handler is a mock handler that will call a StubFunc when it is served.
+// A mock.Handler's StubFunc is inherited by derived handlers.
 type Handler struct {
 	handlers []http.Handler
 	stub     StubFunc
