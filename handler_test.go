@@ -50,7 +50,9 @@ func recoverHandler(response http.ResponseWriter, request *http.Request) {
 }
 
 func createMapHandler(response http.ResponseWriter, request *http.Request) {
-	infuse.Set(response, make(map[string]string))
+	if ok := infuse.Set(response, make(map[string]string)); !ok {
+		panic("Failed to set map.")
+	}
 	infuse.Next(response, request)
 }
 
