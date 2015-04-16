@@ -1,60 +1,36 @@
 // Package infuse provides an immutable, concurrency-safe middleware handler
 // that conforms to http.Handler. An infuse.Handler is fully compatible with
-// the standard library, supports flexible chaining, and provides a shared
-// context between middleware handlers within a single request without
-// relying on global state, locks, or shared closures.
+// the Go standard library, supports flexible chaining, and provides a shared
+// context between middleware handlers without relying on global state, locks,
+// or shared closures.
 package infuse
 
 import "net/http"
 
-// A Handler is a middleware handler that conforms to http.Handler.
-//
-// An http.Handler passed to the Handle method can call the http.Handler
-// provided immediately after it using infuse.Next. All handlers within a
-// single request-response cycle can share data of any type using infuse.Get
-// and infuse.Set.
+// A Handler is a chained middleware handler that conforms to http.Handler.
 type Handler interface {
-	// Handle returns a new infuse.Handler that serves the provided
-	// http.Handler after all existing http.Handlers attached to the old
-	// infuse.Handler are served. The provided http.Handler will be called
-	// if and only if the previously-provided http.Handler calls infuse.Next
-	// or there is no previously-provided http.Handler.
-	//
-	// The provided http.Handler may be an infuse.Handler itself. However,
-	// calls to infuse.Next inside of a nested infuse.Handler are local to that
-	// infuse.Handler and will not cause handlers outside of it to be called.
-	// Therefore, for infuse.Handlers A and B and http.Handler C,
-	//   A.Handle(B).Handle(C)
-	// will never serve http.Handler C, but
-	//   A.Handle(B.Handle(C))
-	// may serve http.Handler C.
+	// Handle returns a copy of the current infuse.Handler with the provided
+	// http.Handler attached. The provided http.Handler will be called when
+	// the http.Handler attached before it calls infuse.Next. The first
+	// http.Handler that is attached to an infuse.Handler will be called
+	// when the infuse.Handler is served (via ServeHTTP).
 	Handle(handler http.Handler) Handler
 
 	// HandleFunc has the same behavior as Handle, but it takes a handler
 	// function instead of an http.Handler.
 	HandleFunc(handler func(http.ResponseWriter, *http.Request)) Handler
 
-	// Stack has the same behavior as Handle but will implicitly serve an
-	// http.Handler attached after the provided http.Handler, if another
-	// http.Handler is attached. The provided http.Handler will still only be
-	// called if the previously-provided http.Handler calls infuse.Next or
-	// there is no previously-provided http.Handler.
+	// Stack has the same behavior as Handle but implicitly calls infuse.Next
+	// after the provided http.Handler is called.
 	//
-	// Stack is useful for serving generic handlers that do not know about
-	// infuse. It can also be used to serve another infuse.Handler.
+	// Stack is useful for attaching generic handlers that do not know about
+	// infuse and therefore do not call infuse.Next themselves. It can also be
+	// used to attach one infuse.Handler to another infuse.Handler (as calls
+	// to infuse.Next from an http.Handler attached to one infuse.Handler
+	// do not "leak out" into a infuse.Handler nested above it).
 	//
-	// Note that for infuse.Handlers A and B and http.Handler C,
-	//   A.Handle(B).Handle(C)
-	// will never serve http.Handler C. While
-	//   A.Stack(B).Handle(C)
-	// will always serve http.Handler C after infuse.Handler B is served.
-	// However, it is preferable to use
-	//   A.Handle(B.Handle(C))
-	// as it permits serving C when the last http.Handler attached to B calls
-	// infuse.Next.
-	//
-	// Finally, do not call infuse.Next in a stacked http.Handler unless you
-	// intend to serve the rest of the middleware chain multiple times.
+	// Do not call infuse.Next in a stacked http.Handler unless you intend to
+	// serve the rest of the middleware chain more than once.
 	Stack(handler http.Handler) Handler
 
 	// StackFunc is the same as Stack, but it takes a handler function
@@ -134,33 +110,29 @@ func (l *layeredResponse) next(request *http.Request) bool {
 	return true
 }
 
-// Next serves the next http.Handler. Next should only be called from an
-// http.Handler attached to an infuse.Handler. See infuse.Handler for more
-// information.
+// Next serves the next http.Handler in the middleware chain. Next uses the
+// provided http.ResponseWriter to determine which http.Handler to call, so
+// the response must be same response provided to the current http.Handler.
 //
-// Next will return false if no subsequent http.Handler is attached, or if the
-// provided http.ResponseWriter was not served by an infuse.Handler. For Next
-// to successfully serve the correct handler and return true, the response
-// must be the same http.ResponseWriter that the current http.Handler was
-// called with (via its infuse.Handler).
+// The boolean return value indicates whether the call succeeded. Next will
+// return false if no subsequent http.Handler is available.
 //
-// Calling Next multiple times in the same handler will run the rest of the
-// middleware chain attached to the infuse.Handler for each call.
+// Calling Next multiple times in the same handler will call all remaining
+// http.Handlers in the middleware chain for each call.
 func Next(response http.ResponseWriter, request *http.Request) bool {
 	sharedResponse, ok := response.(*layeredResponse)
 	return ok && sharedResponse.next(request)
 }
 
-// Get will retrieve a context value that is shared by each http.Handler
-// attached to the same infuse.Handler within a single request-response cycle.
-// http.Handlers that are attached to different infuse.Handlers do not share
-// the same context value.
+// Get will retrieve a context value that is shared by every http.Handler
+// attached to the same infuse.Handler.
 //
 // If the context value is a pointer, map, or slice, changes to the referent
 // data will be seen by other http.Handlers that share the context value. If
 // called with an invalid response, Get returns nil.
 //
-// To retrieve a value of a particular type, consider wrapping infuse.Get:
+// To retrieve a value of a particular type, consider wrapping infuse.Get in
+// another function:
 //   func GetMyContext(response http.ResponseWriter) *MyContext {
 //      return infuse.Get(response).(*MyContext)
 //   }
@@ -184,10 +156,9 @@ func Get(response http.ResponseWriter) interface{} {
 	return sharedResponse.context
 }
 
-// Set will store a context value that is shared by the each http.Handler
-// attached to the same infuse.Handler within a single request-response cycle.
-// http.Handlers that are attached to different infuse.Handlers do not share
-// the same context value. Set will return false if the response is invalid.
+// Set will store a context value that is shared by every http.Handler attached
+// to the same infuse.Handler. The boolean return value indicates whether the
+// call succeeded. Set will return false if the provided response is invalid.
 func Set(response http.ResponseWriter, value interface{}) bool {
 	sharedResponse, ok := response.(*layeredResponse)
 	if !ok {
