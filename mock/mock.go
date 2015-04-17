@@ -1,5 +1,5 @@
-// Package mock makes it easy to test an infuse.Handler that is injected as a
-// dependency of the unit under test.
+// Package mock makes it easy to unit test code that depends on an
+// infuse.Handler.
 package mock
 
 import (
@@ -9,13 +9,22 @@ import (
 )
 
 // Handler is a mock handler that will call a StubFunc when it is served.
-// A mock.Handler's StubFunc is inherited by derived handlers.
 type Handler struct {
 	handlers []http.Handler
 	stub     StubFunc
 }
 
+// A StubFunc is called when a mock.Handler is served. The third argument
+// consists of all of the http.Handlers in the middleware chain that a real
+// infuse.Handler would call in the order that they would be called.
 type StubFunc func(http.ResponseWriter, *http.Request, []http.Handler)
+
+// Stub provides a StubFunc to a mock.Handler. If a mock.Handler is served
+// without a StubFunc, it will panic. The provided StubFunc will be inherited
+// by any derived handlers
+func (h *Handler) Stub(stub StubFunc) {
+	h.stub = stub
+}
 
 func (h *Handler) Handle(handler http.Handler) infuse.Handler {
 	return &Handler{handlers: append(h.handlers, handler), stub: h.stub}
@@ -41,8 +50,4 @@ func (h *Handler) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		panic("Mock infuse.Handler missing stub.")
 	}
 	h.stub(response, request, h.handlers)
-}
-
-func (h *Handler) Stub(stub StubFunc) {
-	h.stub = stub
 }
