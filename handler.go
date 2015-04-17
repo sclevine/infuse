@@ -112,7 +112,8 @@ func (l *layeredResponse) next(request *http.Request) bool {
 
 // Next serves the next http.Handler in the middleware chain. Next uses the
 // provided http.ResponseWriter to determine which http.Handler to call, so
-// the response must be same response provided to the current http.Handler.
+// the response must be same http.ResponseWriter provided to the current
+// http.Handler in the chain.
 //
 // The boolean return value indicates whether the call succeeded. Next will
 // return false if no subsequent http.Handler is available.
@@ -124,24 +125,23 @@ func Next(response http.ResponseWriter, request *http.Request) bool {
 	return ok && sharedResponse.next(request)
 }
 
-// Get will retrieve a context value that is shared by every http.Handler
-// attached to the same infuse.Handler.
+// Get will retrieve a context value that is shared by all http.Handlers
+// attached to the same infuse.Handler. The context value is associated with
+// an http.ResponseWriter, so it has the same life cycle as the provided
+// response. Get will return nil if the provided response does not have an
+// associated context value.
 //
-// If the context value is a pointer, map, or slice, changes to the referent
-// data will be seen by other http.Handlers that share the context value. If
-// called with an invalid response, Get returns nil.
+// If the context value is a pointer, map, or slice, then changes to the data
+// in one http.Handler will be seen by other http.Handlers that share it.
 //
-// To retrieve a value of a particular type, consider wrapping infuse.Get in
-// another function:
-//   func GetMyContext(response http.ResponseWriter) *MyContext {
-//      return infuse.Get(response).(*MyContext)
-//   }
+// To retrieve a value of a particular type, consider wrapping Get and Set in
+// another function. For example, this function could be used to share a map
+// of floating-point numbers between middleware handlers:
 //
-// Example using a map:
-//   func HandlerMap(response http.ResponseWriter) map[string]string {
-//      handlerMap, ok := infuse.Get(response).(map[string]string)
+//   func HandlerMap(response http.ResponseWriter) map[string]float64 {
+//      handlerMap, ok := infuse.Get(response).(map[string]float64)
 //      if !ok || handlerMap == nil {
-//         handlerMap = make(map[string]string)
+//         handlerMap = make(map[string]float64)
 //         if ok := infuse.Set(response, handlerMap); !ok {
 //            return nil
 //         }
@@ -156,9 +156,12 @@ func Get(response http.ResponseWriter) interface{} {
 	return sharedResponse.context
 }
 
-// Set will store a context value that is shared by every http.Handler attached
-// to the same infuse.Handler. The boolean return value indicates whether the
-// call succeeded. Set will return false if the provided response is invalid.
+// Set will store a context value that is shared by all http.Handlers attached
+// to the same infuse.Handler. The context value is associated with an
+// http.ResponseWriter, so it has the same life cycle as the provided response.
+//
+// The boolean return value indicates whether the setting the context value
+// succeeded. Set will return false if the provided response is invalid.
 func Set(response http.ResponseWriter, value interface{}) bool {
 	sharedResponse, ok := response.(*layeredResponse)
 	if !ok {
