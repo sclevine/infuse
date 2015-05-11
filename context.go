@@ -2,19 +2,6 @@ package infuse
 
 import "net/http"
 
-type contextualResponse struct {
-	http.ResponseWriter
-	context interface{}
-}
-
-func (c *contextualResponse) get() interface{} {
-	return c.context
-}
-
-func (c *contextualResponse) set(value interface{}) {
-	c.context = value
-}
-
 // Get will retrieve a context value that is shared by all http.Handlers
 // attached to the same infuse.Handler. The context value is associated with
 // an http.ResponseWriter, so it has the same life cycle as the provided
@@ -59,4 +46,17 @@ func Set(response http.ResponseWriter, value interface{}) bool {
 	}
 	sharedResponse.set(value)
 	return true
+}
+
+type contextualResponse struct {
+	http.ResponseWriter
+	context interface{}
+}
+
+func (c *contextualResponse) get() interface{} {
+	return c.context
+}
+
+func (c *contextualResponse) set(value interface{}) {
+	c.context = value
 }

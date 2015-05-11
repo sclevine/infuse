@@ -7,12 +7,20 @@ import (
 	"net/http"
 )
 
-type httpResponse struct {
-	*layeredResponse
+type extendedResponse interface {
+	http.CloseNotifier
+	http.Flusher
+	http.Hijacker
+	io.ReaderFrom
+	stringWriter
 }
 
 type stringWriter interface {
 	WriteString(s string) (n int, err error)
+}
+
+type httpResponse struct {
+	*layeredResponse
 }
 
 func (h *httpResponse) CloseNotify() <-chan bool {
@@ -33,19 +41,4 @@ func (h *httpResponse) ReadFrom(src io.Reader) (n int64, err error) {
 
 func (h *httpResponse) WriteString(s string) (n int, err error) {
 	return h.ResponseWriter.(stringWriter).WriteString(s)
-}
-
-type extendedResponse interface {
-	http.CloseNotifier
-	http.Flusher
-	http.Hijacker
-	io.ReaderFrom
-	stringWriter
-}
-
-func extend(response *layeredResponse) http.ResponseWriter {
-	if _, ok := response.ResponseWriter.(extendedResponse); !ok {
-		return response
-	}
-	return &httpResponse{response}
 }

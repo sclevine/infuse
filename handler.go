@@ -42,6 +42,21 @@ type Handler interface {
 	ServeHTTP(response http.ResponseWriter, request *http.Request)
 }
 
+// Next serves the next http.Handler in the middleware chain. Next uses the
+// provided http.ResponseWriter to determine which http.Handler to call, so
+// the response must be same http.ResponseWriter provided to the current
+// http.Handler in the chain.
+//
+// The boolean return value indicates whether the call succeeded. Next will
+// return false if no subsequent http.Handler is available.
+//
+// Calling Next multiple times in the same handler will call all remaining
+// http.Handlers in the middleware chain for each call.
+func Next(response http.ResponseWriter, request *http.Request) bool {
+	sharedResponse, ok := response.(infuseResponse)
+	return ok && sharedResponse.next(request)
+}
+
 // New returns a new infuse.Handler.
 func New() Handler {
 	return (*layer)(nil)
@@ -81,47 +96,5 @@ func (l *layer) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	for ; current.prev != nil; current = current.prev {
 		sharedResponse.layers = append(sharedResponse.layers, current)
 	}
-	current.handler.ServeHTTP(extend(sharedResponse), request)
-}
-
-type infuseResponse interface {
-	next(request *http.Request) bool
-	get() interface{}
-	set(value interface{})
-}
-
-type layeredResponse struct {
-	*contextualResponse
-	layers []*layer
-}
-
-func newLayeredResponse(response http.ResponseWriter) *layeredResponse {
-	return &layeredResponse{&contextualResponse{response, nil}, nil}
-}
-
-func (l *layeredResponse) next(request *http.Request) bool {
-	if len(l.layers) == 0 {
-		return false
-	}
-
-	next := l.layers[len(l.layers)-1]
-	remaining := l.layers[:len(l.layers)-1]
-	sharedResponse := &layeredResponse{l.contextualResponse, remaining}
-	next.handler.ServeHTTP(extend(sharedResponse), request)
-	return true
-}
-
-// Next serves the next http.Handler in the middleware chain. Next uses the
-// provided http.ResponseWriter to determine which http.Handler to call, so
-// the response must be same http.ResponseWriter provided to the current
-// http.Handler in the chain.
-//
-// The boolean return value indicates whether the call succeeded. Next will
-// return false if no subsequent http.Handler is available.
-//
-// Calling Next multiple times in the same handler will call all remaining
-// http.Handlers in the middleware chain for each call.
-func Next(response http.ResponseWriter, request *http.Request) bool {
-	sharedResponse, ok := response.(infuseResponse)
-	return ok && sharedResponse.next(request)
+	current.handler.ServeHTTP(sharedResponse.extend(), request)
 }
