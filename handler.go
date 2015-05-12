@@ -42,16 +42,17 @@ type Handler interface {
 	ServeHTTP(response http.ResponseWriter, request *http.Request)
 }
 
-// Next serves the next http.Handler in the middleware chain. Next uses the
-// provided http.ResponseWriter to determine which http.Handler to call, so
-// the response must be same http.ResponseWriter provided to the current
-// http.Handler in the chain.
+// Next serves the next http.Handler in the middleware chain. It is always
+// called from within an http.Handler that is handled by a infuse.Handler.
+// The provided response must be same http.ResponseWriter provided to the
+// current http.Handler in the chain.
 //
 // The boolean return value indicates whether the call succeeded. Next will
-// return false if no subsequent http.Handler is available.
+// return false if no subsequent http.Handler is available or if the response
+// is invalid.
 //
 // Calling Next multiple times in the same handler will call all remaining
-// http.Handlers in the middleware chain for each call.
+// http.Handlers in the middleware chain each time.
 func Next(response http.ResponseWriter, request *http.Request) bool {
 	sharedResponse, ok := response.(infuseResponse)
 	return ok && sharedResponse.next(request)
