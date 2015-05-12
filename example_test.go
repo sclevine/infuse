@@ -1,17 +1,14 @@
-Infuse
-======
+package infuse_test
 
-[![Build Status](https://api.travis-ci.org/sclevine/infuse.png?branch=master)](http://travis-ci.org/sclevine/infuse)
-[![GoDoc](https://godoc.org/github.com/sclevine/infuse?status.svg)](https://godoc.org/github.com/sclevine/infuse)
+import (
+	"fmt"
+	"io/ioutil"
+	"net"
+	"net/http"
+	"strings"
 
-Infuse provides an immutable, concurrency-safe middleware handler
-that conforms to `http.Handler`. An `infuse.Handler` is fully compatible with
-the Go standard library, supports flexible chaining, and provides a shared
-context between middleware handlers without relying on global state, locks,
-or shared closures.
-
-BasicAuth example:
-```go
+	"github.com/sclevine/infuse"
+)
 
 func Example() {
 	authHandler := infuse.New().HandleFunc(basicAuth)
@@ -59,7 +56,34 @@ func basicAuth(response http.ResponseWriter, request *http.Request) {
 		fmt.Fprint(response, "Server Error")
 	}
 }
-```
 
-The `mock` package makes it easy to unit test code that depends on an
-`infuse.Handler`.
+func userValid(username, password string) bool {
+	if username == "bob" && password == "1234" {
+		return true
+	}
+	if username == "alice" && password == "5678" {
+		return true
+	}
+	return false
+}
+
+func doRequest(url string) {
+	response, err := http.Get(url)
+	if err != nil {
+		panic(err)
+	}
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%s\n", body)
+}
+
+func freePort() string {
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		panic(err)
+	}
+	defer listener.Close()
+	return strings.SplitN(listener.Addr().String(), ":", 2)[1]
+}
