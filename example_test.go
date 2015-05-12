@@ -17,8 +17,9 @@ func Example() {
 	router := http.NewServeMux()
 	router.Handle("/hello", authHandler.HandleFunc(userGreeting))
 	router.Handle("/goodbye", authHandler.HandleFunc(userFarewell))
-	port := freePort()
-	go http.ListenAndServe(":"+port, router)
+	listener, port := listen()
+	defer listener.Close()
+	go (&http.Server{Handler: router, Addr: ":" + port}).Serve(listener)
 
 	doRequest(fmt.Sprintf("http://bob:1234@localhost:%s/hello", port))
 	doRequest(fmt.Sprintf("http://alice:5678@localhost:%s/goodbye", port))
@@ -81,11 +82,10 @@ func doRequest(url string) {
 	fmt.Printf("%s\n", body)
 }
 
-func freePort() string {
+func listen() (net.Listener, string) {
 	listener, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		panic(err)
 	}
-	defer listener.Close()
-	return strings.SplitN(listener.Addr().String(), ":", 2)[1]
+	return listener, strings.SplitN(listener.Addr().String(), ":", 2)[1]
 }
