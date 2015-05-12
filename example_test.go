@@ -1,3 +1,4 @@
+// +build go1.4
 package infuse_test
 
 import (
