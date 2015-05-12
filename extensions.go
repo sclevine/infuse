@@ -7,38 +7,38 @@ import (
 	"net/http"
 )
 
-type extendedResponse interface {
-	http.CloseNotifier
-	http.Flusher
-	http.Hijacker
-	io.ReaderFrom
-	stringWriter
-}
-
 type stringWriter interface {
 	WriteString(s string) (n int, err error)
 }
 
-type httpResponse struct {
+type fullResponse struct {
 	*layeredResponse
 }
 
-func (h *httpResponse) CloseNotify() <-chan bool {
-	return h.ResponseWriter.(http.CloseNotifier).CloseNotify()
+func (f *fullResponse) CloseNotify() <-chan bool {
+	return f.ResponseWriter.(http.CloseNotifier).CloseNotify()
 }
 
-func (h *httpResponse) Flush() {
-	h.ResponseWriter.(http.Flusher).Flush()
+func (f *fullResponse) Flush() {
+	f.ResponseWriter.(http.Flusher).Flush()
 }
 
-func (h *httpResponse) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	return h.ResponseWriter.(http.Hijacker).Hijack()
+func (f *fullResponse) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return f.ResponseWriter.(http.Hijacker).Hijack()
 }
 
-func (h *httpResponse) ReadFrom(src io.Reader) (n int64, err error) {
-	return h.ResponseWriter.(io.ReaderFrom).ReadFrom(src)
+func (f *fullResponse) ReadFrom(src io.Reader) (n int64, err error) {
+	return f.ResponseWriter.(io.ReaderFrom).ReadFrom(src)
 }
 
-func (h *httpResponse) WriteString(s string) (n int, err error) {
-	return h.ResponseWriter.(stringWriter).WriteString(s)
+func (f *fullResponse) WriteString(s string) (n int, err error) {
+	return f.ResponseWriter.(stringWriter).WriteString(s)
+}
+
+type flushableResponse struct {
+	*layeredResponse
+}
+
+func (f *flushableResponse) Flush() {
+	f.ResponseWriter.(http.Flusher).Flush()
 }

@@ -15,83 +15,105 @@ import (
 )
 
 var extendedResponseMethodsFixture = `
+attempting extensions
 CloseNotify called
 Flush called
 Hijack called
 ReadFrom called with some data
 WriteString called with some string`
 
-func TestExtendedResponseMethods(t *testing.T) {
-	handler := infuse.New().HandleFunc(extendedMethodsPresentHandler)
-	testHandlerResponse(t, serveMock(handler), extendedResponseMethodsFixture)
+var flushableResponseMethodsFixture = `
+attempting extensions
+Flush called`
 
-	handler = infuse.New().HandleFunc(extendedMethodsMissingHandler)
-	testHandlerResponse(t, serve(handler), "")
+func TestResponseMethods(t *testing.T) {
+	handler := infuse.New().HandleFunc(responseMethodsHandler)
+	testHandlerResponse(t, serveExtended(handler), extendedResponseMethodsFixture)
+	testHandlerResponse(t, serveFlushable(handler), flushableResponseMethodsFixture)
+	testHandlerResponse(t, serveLimited(handler), "attempting extensions")
 }
 
-func extendedMethodsPresentHandler(response http.ResponseWriter, _ *http.Request) {
-	response.(http.CloseNotifier).CloseNotify()
-	response.(http.Flusher).Flush()
-	response.(http.Hijacker).Hijack()
-	response.(io.ReaderFrom).ReadFrom(strings.NewReader("some data"))
-	response.(stringWriter).WriteString("some string")
-}
+func responseMethodsHandler(response http.ResponseWriter, _ *http.Request) {
+	fmt.Fprintln(response, "attempting extensions")
 
-func extendedMethodsMissingHandler(response http.ResponseWriter, _ *http.Request) {
 	if _, ok := response.(http.CloseNotifier); ok {
-		panic("Response should not implement http.CloseNotifier.")
+		response.(http.CloseNotifier).CloseNotify()
 	}
 	if _, ok := response.(http.Flusher); ok {
-		panic("Response should not implement http.Flusher.")
+		response.(http.Flusher).Flush()
 	}
 	if _, ok := response.(http.Hijacker); ok {
-		panic("Response should not implement http.Hijacker.")
+		response.(http.Hijacker).Hijack()
 	}
 	if _, ok := response.(io.ReaderFrom); ok {
-		panic("Response should not implement io.ReaderFrom.")
+		response.(io.ReaderFrom).ReadFrom(strings.NewReader("some data"))
 	}
 	if _, ok := response.(stringWriter); ok {
-		panic("Response should not implement WriteString method.")
+		response.(stringWriter).WriteString("some string")
 	}
-}
-
-func serveMock(handler http.Handler) string {
-	response := &mockResponse{httptest.NewRecorder()}
-	handler.ServeHTTP(response, &http.Request{})
-	return response.Body.String()
 }
 
 type stringWriter interface {
 	WriteString(s string) (n int, err error)
 }
 
-type mockResponse struct {
+func serveExtended(handler http.Handler) string {
+	response := &extendedResponse{httptest.NewRecorder()}
+	handler.ServeHTTP(response, &http.Request{})
+	return response.Body.String()
+}
+
+func serveFlushable(handler http.Handler) string {
+	response := &flushableResponse{httptest.NewRecorder()}
+	handler.ServeHTTP(response, &http.Request{})
+	return response.Body.String()
+}
+
+func serveLimited(handler http.Handler) string {
+	response := &limitedResponse{httptest.NewRecorder()}
+	handler.ServeHTTP(response, &http.Request{})
+	return response.ResponseWriter.(*httptest.ResponseRecorder).Body.String()
+}
+
+type extendedResponse struct {
 	*httptest.ResponseRecorder
 }
 
-func (m *mockResponse) CloseNotify() <-chan bool {
-	fmt.Fprintf(m, "CloseNotify called\n")
+func (e *extendedResponse) CloseNotify() <-chan bool {
+	fmt.Fprintln(e, "CloseNotify called")
 	return nil
 }
 
-func (m *mockResponse) Flush() {
-	fmt.Fprintf(m, "Flush called\n")
+func (e *extendedResponse) Flush() {
+	fmt.Fprintln(e, "Flush called")
 }
 
-func (m *mockResponse) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	fmt.Fprintf(m, "Hijack called\n")
+func (e *extendedResponse) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	fmt.Fprintln(e, "Hijack called")
 	return nil, nil, nil
 }
 
-func (m *mockResponse) ReadFrom(src io.Reader) (n int64, err error) {
+func (e *extendedResponse) ReadFrom(src io.Reader) (n int64, err error) {
 	srcStr, err := ioutil.ReadAll(src)
 	if err == nil {
-		fmt.Fprintf(m, "ReadFrom called with %s\n", srcStr)
+		fmt.Fprintf(e, "ReadFrom called with %s\n", srcStr)
 	}
 	return 0, nil
 }
 
-func (m *mockResponse) WriteString(s string) (n int, err error) {
-	fmt.Fprintf(m, "WriteString called with %s\n", s)
+func (e *extendedResponse) WriteString(s string) (n int, err error) {
+	fmt.Fprintf(e, "WriteString called with %s\n", s)
 	return 0, nil
+}
+
+type flushableResponse struct {
+	*httptest.ResponseRecorder
+}
+
+func (f *flushableResponse) Flush() {
+	fmt.Fprintln(f, "Flush called")
+}
+
+type limitedResponse struct {
+	http.ResponseWriter
 }

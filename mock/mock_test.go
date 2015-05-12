@@ -33,13 +33,13 @@ func TestMock(t *testing.T) {
 		fmt.Fprintln(response, "end stub")
 	})
 	handler := setupHandlers(mockHandler)
-	testHandlerResponse(t, handler, mockHandlerFixture)
+	testHandlerResponse(t, serve(handler), mockHandlerFixture)
 }
 
-func testHandlerResponse(t *testing.T, handler http.Handler, fixture string) {
+func testHandlerResponse(t *testing.T, body string, fixture string) {
 	expected := strings.TrimSpace(fixture)
-	if body := strings.TrimSpace(serve(handler)); body != expected {
-		t.Fatalf("Expected:\n%s\nGot:\n%s\n", expected, body)
+	if trimmedBody := strings.TrimSpace(body); trimmedBody != expected {
+		t.Fatalf("Expected:\n%s\nGot:\n%s\n", expected, trimmedBody)
 	}
 }
 
