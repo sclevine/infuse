@@ -5,9 +5,8 @@ package infuse_test
 import (
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
-	"strings"
+	"net/http/httptest"
 
 	"github.com/sclevine/infuse"
 )
@@ -17,13 +16,12 @@ func Example() {
 	router := http.NewServeMux()
 	router.Handle("/hello", authHandler.HandleFunc(userGreeting))
 	router.Handle("/goodbye", authHandler.HandleFunc(userFarewell))
-	listener, port := listen()
-	defer listener.Close()
-	go (&http.Server{Handler: router, Addr: ":" + port}).Serve(listener)
+	server := httptest.NewServer(router)
+	defer server.Close()
 
-	doRequest(fmt.Sprintf("http://bob:1234@localhost:%s/hello", port))
-	doRequest(fmt.Sprintf("http://alice:5678@localhost:%s/goodbye", port))
-	doRequest(fmt.Sprintf("http://intruder:guess@localhost:%s/goodbye", port))
+	doRequest(server.URL+"/hello", "bob", "1234")
+	doRequest(server.URL+"/goodbye", "alice", "5678")
+	doRequest(server.URL+"/goodbye", "intruder", "guess")
 
 	// Output:
 	// Hello bob!
@@ -70,8 +68,13 @@ func userValid(username, password string) bool {
 	return false
 }
 
-func doRequest(url string) {
-	response, err := http.Get(url)
+func doRequest(url, username, password string) {
+	request, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		panic(err)
+	}
+	request.SetBasicAuth(username, password)
+	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		panic(err)
 	}
@@ -80,12 +83,4 @@ func doRequest(url string) {
 		panic(err)
 	}
 	fmt.Printf("%s\n", body)
-}
-
-func listen() (net.Listener, string) {
-	listener, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		panic(err)
-	}
-	return listener, strings.SplitN(listener.Addr().String(), ":", 2)[1]
 }
