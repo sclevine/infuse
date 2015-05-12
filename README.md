@@ -18,12 +18,12 @@ func Example() {
 	router := http.NewServeMux()
 	router.Handle("/hello", authHandler.HandleFunc(userGreeting))
 	router.Handle("/goodbye", authHandler.HandleFunc(userFarewell))
-	port := freePort()
-	go http.ListenAndServe(":"+port, router)
+	server := httptest.NewServer(router)
+	defer server.Close()
 
-	doRequest(fmt.Sprintf("http://bob:1234@localhost:%s/hello", port))
-	doRequest(fmt.Sprintf("http://alice:5678@localhost:%s/goodbye", port))
-	doRequest(fmt.Sprintf("http://intruder:guess@localhost:%s/goodbye", port))
+	doRequest(server.URL+"/hello", "bob", "1234")
+	doRequest(server.URL+"/goodbye", "alice", "5678")
+	doRequest(server.URL+"/goodbye", "intruder", "guess")
 
 	// Output:
 	// Hello bob!
